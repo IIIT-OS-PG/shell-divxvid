@@ -6,6 +6,7 @@
 #include <string.h>
 #include <string>
 #include <vector>
+#include <map>
 
 using namespace std ;
 
@@ -13,10 +14,13 @@ vector<string> parse_input(string&, const char*);
 void execute_normal_command(string&, int, string&) ;
 void execute_piped_command(vector<string>&, int, string&) ;
 vector<string> detect_append_redir(string&) ;
+string get_command(string) ;
+void handle_alias(map<string, string>&, string&) ;
 
 int main() {
 
-	const string PS1 = "$> " ; 
+	const string PS1 = "$> " ;
+	map<string, string> alias_store ; 
 	string input ;
 	int redirection_status ;
 
@@ -29,6 +33,16 @@ int main() {
 			break ;
 		if(input=="")
 			continue ;
+		string command_got = get_command(input) ;
+		if(command_got == "alias") {
+			handle_alias(alias_store, input);
+			continue ;
+		} 
+		if( alias_store.find(command_got) != alias_store.end() ) {
+			//this command is present in the alias store
+			input = alias_store[command_got] ;
+		}
+
 		vector<string> append_redir_parsed = detect_append_redir(input) ;
 		if(append_redir_parsed.size() != 1) {
 			redirection_status = 2 ;
@@ -41,10 +55,6 @@ int main() {
 			redirection_status = 1 ;
 			vector<string> temp = parse_input(output_redir_parsed.back(), " ") ;
 			file_name = temp.back() ;
-		}
-
-		if(redirection_status != 0) {
-			cout << "File name : " << file_name  << " Status : " << redirection_status << endl ;
 		}
 
 		vector<string> parsed_piped_input = parse_input(output_redir_parsed[0], "|");
@@ -82,7 +92,6 @@ void execute_normal_command(string& command, int redir_status, string& file_name
 	if(pid == 0) {
 		int fd = 1 ;
 		if(redir_status != 0) {
-			cout << "got filename : " << file_name << endl ;
 			char* tmp_f_name = (char*) file_name.c_str();
 			fd = open(tmp_f_name, O_WRONLY | O_CREAT | (redir_status == 1 ? O_TRUNC : O_APPEND), 0644);
 		}
@@ -116,7 +125,6 @@ void execute_piped_command(vector<string>& commands, int redir_status, string& f
 				close(pipe_fd[0]) ;
 				close(pipe_fd[1]) ;
 				if(redir_status != 0) {
-					cout << "got filename : " << file_name << endl ;
 					char* tmp_f_name = (char*) file_name.c_str();
 					fd = open(tmp_f_name, O_WRONLY | O_CREAT | (redir_status == 1 ? O_TRUNC : O_APPEND), 0644);
 				}
@@ -161,4 +169,21 @@ vector<string> detect_append_redir(string& input) {
 		temp.push_back(input) ;
 	}
 	return temp ;
+}
+
+string get_command(string input) {
+	char *val = (char*) input.c_str();
+	char *cmd = strtok(val, " ");
+	string command(cmd) ;
+	return command ;
+}
+
+void handle_alias(map<string, string>& alias_map, string& command) {
+	vector<string> parts = parse_input(command, "=") ;
+	string alias = parse_input(parts[0], " ").back() ;
+	string aliased_command = parts.back() ;
+	int tick_pos1 = aliased_command.find('\'');
+	int tick_pos2 = aliased_command.find('\'', tick_pos1 + 2);
+	aliased_command = aliased_command.substr(tick_pos1+1, tick_pos2-tick_pos1-1);
+	alias_map[alias] = aliased_command ;
 }

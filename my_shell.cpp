@@ -7,8 +7,14 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <stdlib.h>
+#include <fstream>
+
+#define CONFIG_FILE "divrc"
 
 using namespace std ;
+
+extern char **environ ;
 
 vector<string> parse_input(string&, const char*);
 void execute_normal_command(string&, int, string&) ;
@@ -16,15 +22,27 @@ void execute_piped_command(vector<string>&, int, string&) ;
 vector<string> detect_append_redir(string&) ;
 string get_command(string) ;
 void handle_alias(map<string, string>&, string&) ;
+map<string, string> initialize_shell() ;
+void cd_impl(string&) ;
+void reset_config_file() ;
 
 int main() {
 
-	const string PS1 = "$> " ;
+	map<string, string> env_variables = initialize_shell();
+
+	string PS1 ;
+	if(env_variables.find("PS1") != env_variables.end()) {
+		PS1 = env_variables["PS1"] ;
+	} else {
+		PS1 = "$ " ;
+	}
+
 	map<string, string> alias_store ; 
 	string input ;
 	int redirection_status ;
 
 	while(1) {
+
 		redirection_status = 0 ;
 		string file_name = "" ;
 		cout << PS1 ;
@@ -36,6 +54,17 @@ int main() {
 		string command_got = get_command(input) ;
 		if(command_got == "alias") {
 			handle_alias(alias_store, input);
+			continue ;
+		} else if(command_got == "cd") {
+			vector<string> temp = parse_input(input, " ") ;
+			cd_impl(temp.back());
+			continue ;
+		} else if(command_got == "resetconfig") {
+			reset_config_file();
+			continue ;
+		} else if(command_got.substr(0, 4) == "PS1=") {
+			vector<string> temp = parse_input(input, "=") ;
+			PS1 = temp.back();
 			continue ;
 		} 
 		if( alias_store.find(command_got) != alias_store.end() ) {
@@ -67,6 +96,50 @@ int main() {
 	}
 
 	return 0 ;
+}
+
+void reset_config_file() {
+	fstream file ;
+	char *path, *home, *user ;
+	path = getenv("PATH");
+	home = getenv("HOME");
+	user = getenv("USER");
+
+	char host_name[512] ;
+	gethostname(host_name, sizeof host_name);
+	
+	file.open(CONFIG_FILE, fstream::out | fstream::trunc);
+
+	file << "PATH='" << path << "'\n" ;
+	file << "HOME='" << home << "'\n" ;
+	file << "USER='" << user << "'\n" ;
+	file << "HOSTNAME='" << host_name << "'\n" ;
+	file << "PS1='$> '\n" ;
+
+	file.close();	
+}
+
+map<string, string> initialize_shell() {
+	
+	fstream file ;
+	map<string, string> env_variables ;
+	string line ;
+
+	file.open(CONFIG_FILE);
+	if(!file.good()) {
+		//if the config file is not found then reset the file to it's core defaults.
+		reset_config_file();
+	}	
+
+	while(getline(file, line)) {
+		vector<string> temp = parse_input(line, "'");
+		string value = temp[1] ;
+		string key = parse_input(temp[0], " =")[0] ;
+		env_variables[key] = value ;
+	}
+	
+	file.close() ;
+	return env_variables ;	
 }
 
 vector<string> parse_input(string& input, const char* delimiter) {
@@ -186,4 +259,9 @@ void handle_alias(map<string, string>& alias_map, string& command) {
 	int tick_pos2 = aliased_command.find('\'', tick_pos1 + 2);
 	aliased_command = aliased_command.substr(tick_pos1+1, tick_pos2-tick_pos1-1);
 	alias_map[alias] = aliased_command ;
+}
+
+void cd_impl(string& path) {
+	const char* pth = path.c_str() ;
+	chdir(pth);
 }

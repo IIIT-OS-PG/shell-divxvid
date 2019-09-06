@@ -16,6 +16,7 @@
 using namespace std ;
 
 extern char **environ ;
+map<string, string> env_variables, alias_store ;
 
 vector<string> parse_input(string&, const char*);
 void execute_normal_command(string&, int, string&) ;
@@ -29,7 +30,7 @@ void reset_config_file() ;
 
 int main() {
 
-	map<string, string> env_variables = initialize_shell();
+	/*map<string, string>*/ env_variables = initialize_shell();
 
 	string PS1 ;
 	if(env_variables.find("PS1") != env_variables.end()) {
@@ -38,7 +39,7 @@ int main() {
 		PS1 = "$ " ;
 	}
 
-	map<string, string> alias_store ; 
+	//map<string, string> alias_store ; 
 	string input ;
 	int redirection_status ;
 
@@ -280,6 +281,9 @@ void handle_alias(map<string, string>& alias_map, string& command) {
 }
 
 void cd_impl(string& path) {
+	if(path[0] == '~') {
+		path = env_variables["HOME"]+path.substr(1, path.length()) ;	
+	}
 	const char* pth = path.c_str() ;
 	chdir(pth);
 }

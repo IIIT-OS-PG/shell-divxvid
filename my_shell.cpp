@@ -11,6 +11,7 @@
 #include <fstream>
 
 #define CONFIG_FILE "divrc"
+#define OVERRIDE_ENV
 
 using namespace std ;
 
@@ -131,12 +132,29 @@ map<string, string> initialize_shell() {
 		reset_config_file();
 	}	
 
+	int i = 0 ;
+	char* envr[10] ;
 	while(getline(file, line)) {
+		//updating the environment variable.
+		string S = line ;
 		vector<string> temp = parse_input(line, "'");
 		string value = temp[1] ;
 		string key = parse_input(temp[0], " =")[0] ;
 		env_variables[key] = value ;
+
+		if(key == "HOME" || key == "PATH" || key == "USER" || key == "HOSTNAME") {
+			envr[i++] = (char*) S.c_str() ;
+			//cout << "written : " << envr[i-1] << endl ;
+		}
 	}
+	
+	#ifdef OVERRIDE_ENV
+		memcpy(environ, envr, sizeof envr) ;
+	#endif
+	/*
+	for(char **env=environ ; *env != 0 ; env++) {
+		cout << *env << endl ;
+	} */
 	
 	file.close() ;
 	return env_variables ;	

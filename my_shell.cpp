@@ -8,15 +8,48 @@
 #include <vector>
 #include <map>
 #include <stdlib.h>
+#include <termios.h>
 #include <fstream>
 
 #define CONFIG_FILE "divrc"
-#define OVERRIDE_ENV
+//#define OVERRIDE_ENV
 
 using namespace std ;
 
 extern char **environ ;
 map<string, string> env_variables, alias_store ;
+
+class raw_input {
+	struct termios old_config, new_config ;
+public:
+	raw_input() {
+		tcgetattr(STDIN_FILENO,&old_config);
+		new_config=old_config;
+		new_config.c_lflag &=(~ICANON & ~ECHO);
+		tcsetattr(STDIN_FILENO,TCSANOW,&new_config);
+	}
+	~raw_input() {
+		tcsetattr(STDIN_FILENO,TCSANOW,&old_config);	
+	}
+	string get_line() {
+		char buffer[1024] ;
+		char c ;
+		int i = 0 ;
+		while((c = getchar())) {
+			putchar(c) ;
+			if(c == 10) {
+				buffer[i] = '\0' ;
+				break;
+			}
+			if(c > 31 && c < 127) {
+				buffer[i++] = c ;
+			}
+		}
+		string temp(buffer) ;
+		return temp ;
+	}
+} ;
+
 
 vector<string> parse_input(string&, const char*);
 void execute_normal_command(string&, int, string&) ;
@@ -42,6 +75,7 @@ int main() {
 	//map<string, string> alias_store ; 
 	string input ;
 	int redirection_status ;
+	//raw_input rip ;
 
 	while(1) {
 
@@ -49,6 +83,7 @@ int main() {
 		string file_name = "" ;
 		cout << PS1 ;
 		getline(cin, input) ;
+		//input = rip.get_line() ;
 		if(input == "exit")
 			break ;
 		if(input=="")

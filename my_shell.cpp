@@ -44,6 +44,12 @@ public:
 			if(c > 31 && c < 127) {
 				buffer[i++] = c ;
 			}
+			if(c == 127 && i > 0) {
+				putchar('\b');
+				putchar(' ');
+				putchar('\b');
+				i-- ;
+			}
 		}
 		string temp(buffer) ;
 		return temp ;
@@ -75,15 +81,15 @@ int main() {
 	//map<string, string> alias_store ; 
 	string input ;
 	int redirection_status ;
-	//raw_input rip ;
+	raw_input rip ;
 
 	while(1) {
 
 		redirection_status = 0 ;
 		string file_name = "" ;
 		cout << PS1 ;
-		getline(cin, input) ;
-		//input = rip.get_line() ;
+		//getline(cin, input) ;
+		input = rip.get_line() ;
 		if(input == "exit")
 			break ;
 		if(input=="")

@@ -69,7 +69,7 @@ void reset_config_file() ;
 
 int main() {
 
-	/*map<string, string>*/ env_variables = initialize_shell();
+	env_variables = initialize_shell();
 
 	string PS1 ;
 	if(env_variables.find("PS1") != env_variables.end()) {
@@ -104,7 +104,7 @@ int main() {
 			continue ;
 		} else if(command_got == "resetconfig") {
 			reset_config_file();
-			continue ;
+			break ;
 		} else if(command_got.substr(0, 4) == "PS1=") {
 			vector<string> temp = parse_input(input, "=") ;
 			PS1 = temp.back();
@@ -172,10 +172,11 @@ map<string, string> initialize_shell() {
 	if(!file.good()) {
 		//if the config file is not found then reset the file to it's core defaults.
 		reset_config_file();
+		file.open(CONFIG_FILE);
 	}	
 
 	int i = 0 ;
-	char* envr[10] ;
+	char* envr[128] ;
 	while(getline(file, line)) {
 		//updating the environment variable.
 		string S = line ;
@@ -215,6 +216,15 @@ vector<string> parse_input(string& input, const char* delimiter) {
 
 void execute_normal_command(string& command, int redir_status, string& file_name) {
 	vector<string> parsed_cmd = parse_input(command, " \n");
+
+	/*
+	if(alias_store.find(parsed_cmd[0]) != alias_store.end()) {
+		string alias_expansion = alias_store[parsed_cmd[0]] ;
+		vector<string> parsed_alias = parse_input(alias_expansion, " \n");
+		parsed_cmd[0] = parsed_alias[0] ;
+		parsed_cmd.insert(parsed_cmd.begin()+1, parsed_alias.begin()+1, parsed_alias.end());
+	}*/
+
 	char* argv[parsed_cmd.size()+1];
 	for(int i = 0 ; i < parsed_cmd.size() ; i++) {
 		argv[i] = (char*) parsed_cmd[i].c_str();
@@ -236,6 +246,7 @@ void execute_normal_command(string& command, int redir_status, string& file_name
 		if(redir_status != 0) {
 			close(fd) ;
 		}
+		exit(0);
 	} else {
 		wait(NULL) ;
 	}
@@ -284,6 +295,7 @@ void execute_piped_command(vector<string>& commands, int redir_status, string& f
 			if(i == lim-1 && redir_status != 0) {
 				close(fd) ;
 			}
+			exit(0);
 		} else {
 			wait(NULL) ;
 			last_fd = pipe_fd[0] ;

@@ -84,6 +84,7 @@ map<string, string> initialize_shell() ;
 void cd_impl(string&) ;
 int parse_command(string&, vector<string>&, string&, bool) ;
 void reset_config_file() ;
+void rewrite_config_file();
 
 int main() {
 
@@ -133,6 +134,14 @@ int main() {
 		} else if(command_got == "history") {
 			for(const string &st : history_of_commands)
 				cout << st << endl ;
+			continue ;
+		} else if(command_got == "export") {
+			//no spaces b/w equal and value.
+			vector<string> sepeq = parse_input(input, "=");
+			string key = parse_input(sepeq[0], " ").back();
+			string value = parse_input(sepeq[1], "'")[0];
+			env_variables[key] = value ;
+			rewrite_config_file();
 			continue ;
 		} else if(command_got.substr(0, 4) == "PS1=" && PS1 != "# ") {
 			vector<string> temp = parse_input(input, "=") ;
@@ -216,18 +225,37 @@ int parse_command(string& input, vector<string> &parsed_piped_input, string& fil
 	return redirection_status ;
 }
 
+void rewrite_config_file() {
+	fstream file ;	
+	file.open(CONFIG_FILE, fstream::out | fstream::trunc);
+
+	for(pair<string,string> kp : env_variables) {
+		file << kp.first << "='" << kp.second << "'\n" ;
+	}
+
+	file.close();
+}
+
 void reset_config_file() {
 	fstream file ;
-	char *path, *home, *user ;
+	char *path, *home, *user, *display, *dbus, *colorterm, *term ;
 	path = getenv("PATH");
 	home = getenv("HOME");
 	user = getenv("USER");
+	display = getenv("DISPLAY") ;
+	dbus = getenv("DBUS_SESSION_BUS_ADDRESS");
+	colorterm = getenv("COLORTERM");
+	term = getenv("TERM");
 
 	char host_name[512] ;
 	gethostname(host_name, sizeof host_name);
 	
 	file.open(CONFIG_FILE, fstream::out | fstream::trunc);
 
+	file << "DISPLAY='" << display << "'\n" ;
+	file << "DBUS_SESSION_BUS_ADDRESS='" << dbus << "'\n" ;
+	file << "TERM='" << term << "'\n" ;
+	file << "COLORTERM='" << colorterm << "'\n" ;
 	file << "PATH='" << path << "'\n" ;
 	file << "HOME='" << home << "'\n" ;
 	file << "USER='" << user << "'\n" ;
@@ -250,12 +278,13 @@ map<string, string> initialize_shell() {
 		file.open(CONFIG_FILE);
 	}	
 
-	int i = 4 ;
+	int i = 0 ;
 	char* envr[64] ;
+	/*
 	envr[0] = (char*)"DISPLAY=:1" ;
 	envr[1] = (char*)"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus";
 	envr[2] = (char*)"COLORTERM=truecolor";
-	envr[3] = (char*)"TERM=xterm-256color";
+	envr[3] = (char*)"TERM=xterm-256color";*/
 	while(getline(file, line)) {
 		//updating the environment variable.
 		string S = line ;
@@ -264,7 +293,7 @@ map<string, string> initialize_shell() {
 		string key = parse_input(temp[0], " =")[0] ;
 		env_variables[key] = value ;
 
-		if(key == "HOME" || key == "PATH" || key == "USER" || key == "HOSTNAME") {
+		if(key != "PS1") {
 			value = key+"="+value ;
 			envr[i] = (char*)malloc(value.size());
 			memcpy(envr[i++], (char*) value.c_str(), value.length()) ;
@@ -276,6 +305,10 @@ map<string, string> initialize_shell() {
 	#ifdef OVERRIDE_ENV
 		memcpy(environ, envr, sizeof envr) ;
 	#endif
+
+	/*for(int ll = 0 ; ll < i ; ll++) {
+		free(envr[ll]);
+	}*/
 	
 	file.close() ;
 	return env_variables ;	

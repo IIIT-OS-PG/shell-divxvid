@@ -20,6 +20,7 @@ using namespace std ;
 extern char **environ ;
 map<string, string> env_variables, alias_store ;
 vector<string> history_of_commands ;
+int last_return_status ;
 
 class raw_input {
 	struct termios old_config, new_config ;
@@ -89,6 +90,7 @@ int main() {
 	env_variables = initialize_shell();	
 
 	string PS1 ;
+	last_return_status = 0 ;
 	if(env_variables.find("PS1") != env_variables.end()) {
 		PS1 = env_variables["PS1"] ;
 	} else {
@@ -199,6 +201,11 @@ int parse_command(string& input, vector<string> &parsed_piped_input, string& fil
 				temps = temps.substr(1, temps.length()) ;
 				if(env_variables.find(temps) != env_variables.end()) {
 					temps = env_variables[temps] ;
+				} else if(temps == "$") {
+					int pid = getpid() ;
+					temps = to_string(pid) ;
+				} else if(temps == "?") {
+					temps = to_string(last_return_status) ;
 				}
 			}
 			parsed_piped_input.push_back(cmd+" "+temps);
@@ -284,14 +291,6 @@ vector<string> parse_input(string& input, const char* delimiter) {
 void execute_normal_command(string& command, int redir_status, string& file_name) {
 	vector<string> parsed_cmd = parse_input(command, " \n");
 
-	/*
-	if(alias_store.find(parsed_cmd[0]) != alias_store.end()) {
-		string alias_expansion = alias_store[parsed_cmd[0]] ;
-		vector<string> parsed_alias = parse_input(alias_expansion, " \n");
-		parsed_cmd[0] = parsed_alias[0] ;
-		parsed_cmd.insert(parsed_cmd.begin()+1, parsed_alias.begin()+1, parsed_alias.end());
-	}*/
-
 	char* argv[parsed_cmd.size()+1];
 	for(int i = 0 ; i < parsed_cmd.size() ; i++) {
 		argv[i] = (char*) parsed_cmd[i].c_str();
@@ -307,7 +306,8 @@ void execute_normal_command(string& command, int redir_status, string& file_name
 		}
 		dup2(fd, 1);
 
-		if(execvp(argv[0], argv) < 0) {
+		last_return_status = execvp(argv[0], argv) ; 
+		if(last_return_status < 0) {
 			cout << "Cannot Execute Command" << endl ;
 		}
 		if(redir_status != 0) {
@@ -355,8 +355,9 @@ void execute_piped_command(vector<string>& commands, int redir_status, string& f
 			}
 			argv[ parsed_cmd.size() ] = NULL ;
 
-			if(execvp(argv[0], argv) < 0) {
-				cout << "Could not execute command : " << argv[0] << endl ;
+			last_return_status = execvp(argv[0], argv) ; 
+			if(last_return_status < 0) {
+				cout << "Cannot Execute Command" << endl ;
 			}
 
 			if(i == lim-1 && redir_status != 0) {

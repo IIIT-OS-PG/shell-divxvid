@@ -10,8 +10,9 @@
 #include <stdlib.h>
 #include <termios.h>
 #include <fstream>
+#include <sstream>
 
-#define CONFIG_FILE "divrc"
+#define CONFIG_FILE ".divrc"
 //#define OVERRIDE_ENV
 
 using namespace std ;
@@ -65,6 +66,7 @@ string get_command(string) ;
 void handle_alias(map<string, string>&, string&) ;
 map<string, string> initialize_shell() ;
 void cd_impl(string&) ;
+int parse_command(string&, vector<string>&, string&, bool) ;
 void reset_config_file() ;
 
 int main() {
@@ -110,26 +112,9 @@ int main() {
 			PS1 = temp.back();
 			continue ;
 		} 
-		if( alias_store.find(command_got) != alias_store.end() ) {
-			//this command is present in the alias store
-			input = alias_store[command_got] ;
-		}
-
-		vector<string> append_redir_parsed = detect_append_redir(input) ;
-		if(append_redir_parsed.size() != 1) {
-			redirection_status = 2 ;
-			vector<string> temp = parse_input(append_redir_parsed.back(), " ") ;
-			file_name = temp.back() ;
-		}
-
-		vector<string> output_redir_parsed = parse_input(append_redir_parsed[0], ">") ;
-		if(output_redir_parsed.size() != 1) {
-			redirection_status = 1 ;
-			vector<string> temp = parse_input(output_redir_parsed.back(), " ") ;
-			file_name = temp.back() ;
-		}
-
-		vector<string> parsed_piped_input = parse_input(output_redir_parsed[0], "|");
+		vector<string> parsed_piped_input;
+		redirection_status = parse_command(input, parsed_piped_input, file_name, false);
+		
 		if(parsed_piped_input.size() == 1) {
 			//a command without a pipe.
 			execute_normal_command(parsed_piped_input[0], redirection_status, file_name) ;
@@ -139,6 +124,51 @@ int main() {
 	}
 
 	return 0 ;
+}
+
+int parse_command(string& input, vector<string> &parsed_piped_input, string& file_name, bool is_alias) {
+	int redirection_status = 0 ;
+	vector<string> append_redir_parsed = detect_append_redir(input) ;
+	if(append_redir_parsed.size() != 1) {
+		redirection_status = 2 ;
+		vector<string> temp = parse_input(append_redir_parsed.back(), " ") ;
+		file_name = temp.back() ;
+	}
+
+	vector<string> output_redir_parsed = parse_input(append_redir_parsed[0], ">") ;
+	if(output_redir_parsed.size() != 1) {
+		redirection_status = 1 ;
+		vector<string> temp = parse_input(output_redir_parsed.back(), " ") ;
+		file_name = temp.back() ;
+	}
+
+	if(is_alias && redirection_status != 0) {
+		cout << "Sorry cannot handle redirection in alias right now." << endl ;
+		return -1 ;
+	}
+
+	vector<string> pipe_op = parse_input(output_redir_parsed[0], "|");
+	for(string &x : pipe_op) {
+		string cmd ; // = get_command(x) ;
+		stringstream ss(x) ;
+		ss >> cmd ;
+		if(alias_store.find(cmd) != alias_store.end()) {
+			vector<string> parsed_alias ;
+			string waste ;
+			int redir = parse_command(alias_store[cmd], parsed_alias, waste, true) ;
+			if(redir != -1) {
+				for(string &pa : parsed_alias) {
+					parsed_piped_input.push_back(pa);
+				}
+				stringstream tempx; 
+				while((ss >> cmd)) { tempx << cmd ; }
+				parsed_piped_input[ parsed_piped_input.size() - 1 ] = parsed_piped_input.back() + tempx.str() ;
+			}
+		} else {
+			parsed_piped_input.push_back(x);
+		} 
+	}
+	return redirection_status ;
 }
 
 void reset_config_file() {

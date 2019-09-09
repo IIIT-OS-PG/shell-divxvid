@@ -13,12 +13,13 @@
 #include <sstream>
 
 #define CONFIG_FILE ".divrc"
-//#define OVERRIDE_ENV
+#define OVERRIDE_ENV
 
 using namespace std ;
 
 extern char **environ ;
 map<string, string> env_variables, alias_store ;
+vector<string> history_of_commands ;
 
 class raw_input {
 	struct termios old_config, new_config ;
@@ -36,7 +37,21 @@ public:
 		char buffer[1024] ;
 		char c ;
 		int i = 0 ;
+		int idx = history_of_commands.size() -1 ;
 		while((c = getchar())) {
+			if(c == 27) {
+				/*
+				left : 68
+				right : 67
+				up : 65
+				down : 66
+				 */
+				int x = getchar() ;
+				int y = getchar() ;
+				if(y == 65 || y == 66) {
+					continue ;
+				}
+			}
 			putchar(c) ;
 			if(c == 10) {
 				buffer[i] = '\0' ;
@@ -71,13 +86,18 @@ void reset_config_file() ;
 
 int main() {
 
-	env_variables = initialize_shell();
+	env_variables = initialize_shell();	
 
 	string PS1 ;
 	if(env_variables.find("PS1") != env_variables.end()) {
 		PS1 = env_variables["PS1"] ;
 	} else {
 		PS1 = "$ " ;
+	}
+
+	const int uid = getuid();
+	if(uid == 0) {
+		PS1 = "# " ;
 	}
 
 	//map<string, string> alias_store ; 
@@ -96,6 +116,7 @@ int main() {
 			break ;
 		if(input=="")
 			continue ;
+		history_of_commands.push_back(input) ;
 		string command_got = get_command(input) ;
 		if(command_got == "alias") {
 			handle_alias(alias_store, input);
@@ -107,14 +128,18 @@ int main() {
 		} else if(command_got == "resetconfig") {
 			reset_config_file();
 			break ;
-		} else if(command_got.substr(0, 4) == "PS1=") {
+		} else if(command_got == "history") {
+			for(const string &st : history_of_commands)
+				cout << st << endl ;
+			continue ;
+		} else if(command_got.substr(0, 4) == "PS1=" && PS1 != "# ") {
 			vector<string> temp = parse_input(input, "=") ;
 			PS1 = temp.back();
 			continue ;
 		} 
 		vector<string> parsed_piped_input;
 		redirection_status = parse_command(input, parsed_piped_input, file_name, false);
-		
+
 		if(parsed_piped_input.size() == 1) {
 			//a command without a pipe.
 			execute_normal_command(parsed_piped_input[0], redirection_status, file_name) ;
@@ -164,6 +189,19 @@ int parse_command(string& input, vector<string> &parsed_piped_input, string& fil
 				while((ss >> cmd)) { tempx << cmd ; }
 				parsed_piped_input[ parsed_piped_input.size() - 1 ] = parsed_piped_input.back() + tempx.str() ;
 			}
+		} else if(cmd == "echo") {
+			int pos = input.find("echo") + 4 ;
+			while(input[pos] == ' ') {pos++;}
+			string temps = input.substr(pos, input.length());
+			if(temps[0] == '"' || temps[0] == '\'') {
+				temps = temps.substr(1, temps.length()-2) ;
+			} else if(temps[0]=='$') {
+				temps = temps.substr(1, temps.length()) ;
+				if(env_variables.find(temps) != env_variables.end()) {
+					temps = env_variables[temps] ;
+				}
+			}
+			parsed_piped_input.push_back(cmd+" "+temps);
 		} else {
 			parsed_piped_input.push_back(x);
 		} 
@@ -206,32 +244,31 @@ map<string, string> initialize_shell() {
 	}	
 
 	int i = 0 ;
-	char* envr[128] ;
+	char* envr[64] ;
 	while(getline(file, line)) {
 		//updating the environment variable.
 		string S = line ;
-		vector<string> temp = parse_input(line, "'");
+		vector<string> temp = parse_input(S, "'");
 		string value = temp[1] ;
 		string key = parse_input(temp[0], " =")[0] ;
 		env_variables[key] = value ;
 
 		if(key == "HOME" || key == "PATH" || key == "USER" || key == "HOSTNAME") {
-			envr[i++] = (char*) S.c_str() ;
+			value = key+"="+value ;
+			envr[i] = (char*)malloc(value.size());
+			memcpy(envr[i++], (char*) value.c_str(), value.length()) ;
 			//cout << "written : " << envr[i-1] << endl ;
 		}
 	}
-	
+	envr[i] = NULL ;
+
 	#ifdef OVERRIDE_ENV
 		memcpy(environ, envr, sizeof envr) ;
 	#endif
-	/*
-	for(char **env=environ ; *env != 0 ; env++) {
-		cout << *env << endl ;
-	} */
 	
 	file.close() ;
 	return env_variables ;	
-}
+}  
 
 vector<string> parse_input(string& input, const char* delimiter) {
 	vector<string> parsed_strings ;

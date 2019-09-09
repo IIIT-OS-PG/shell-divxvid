@@ -250,8 +250,12 @@ map<string, string> initialize_shell() {
 		file.open(CONFIG_FILE);
 	}	
 
-	int i = 0 ;
+	int i = 4 ;
 	char* envr[64] ;
+	envr[0] = (char*)"DISPLAY=:1" ;
+	envr[1] = (char*)"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus";
+	envr[2] = (char*)"COLORTERM=truecolor";
+	envr[3] = (char*)"TERM=xterm-256color";
 	while(getline(file, line)) {
 		//updating the environment variable.
 		string S = line ;
